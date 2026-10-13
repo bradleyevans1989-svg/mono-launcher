@@ -30,6 +30,9 @@ public class SmokeTest {
         ActivityController<MainActivity> c = Robolectric.buildActivity(MainActivity.class).setup();
         MainActivity a = c.get();
         ShadowLooper.idleMainLooper();
+        assertTrue("ask bar opens ChatGPT by default", hasText(a.root, "Ask ChatGPT"));
+        a.prefs.edit().putString("askTarget", "mono").commit();
+        a.buildHome();
         assertTrue("ask bar on home", hasText(a.root, "Ask Mono anything"));
         a.showAssistant(false);
         assertNotNull(a.drawer);

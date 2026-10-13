@@ -2840,6 +2840,22 @@ public class MainActivity extends Activity {
     // ---- Home screen assistant ----
 
     static final int REQUEST_VOICE = 13;
+    static final int REQUEST_CHATGPT_VOICE = 14;
+
+    /** The home ask bar goes to the free ChatGPT app unless the user switches it to Mono in Settings, Assistant. */
+    boolean askOpensChatGpt() {
+        return "chatgpt".equals(this.prefs.getString("askTarget", "chatgpt"));
+    }
+
+    /** Starts a new ChatGPT chat with the text already typed in, or just opens ChatGPT if it can't take shared text. */
+    void askChatGpt(String text) {
+        Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text).setPackage("com.openai.chatgpt");
+        try {
+            startActivity(share);
+        } catch (Exception e) {
+            m48lambda$54$aucommonolauncherMainActivity();
+        }
+    }
 
     Assistant assistant() {
         if (this.assistant == null) {
@@ -2860,7 +2876,8 @@ public class MainActivity extends Activity {
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(16.0f), 0, dp(6.0f), 0);
         bar.setBackground(bg(BLACK, 22));
-        TextView hint = text("Ask Mono anything", 15);
+        final boolean chatGpt = askOpensChatGpt();
+        TextView hint = text(chatGpt ? "Ask ChatGPT" : "Ask Mono anything", 15);
         hint.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         hint.setTextColor(-4598813);
         bar.addView(hint, new LinearLayout.LayoutParams(0, -1, 1.0f));
@@ -2869,15 +2886,23 @@ public class MainActivity extends Activity {
         mic.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                showAssistant(true);
+                if (chatGpt) {
+                    listenFor(REQUEST_CHATGPT_VOICE, "Ask ChatGPT");
+                } else {
+                    showAssistant(true);
+                }
             }
         });
         bar.addView(mic, new LinearLayout.LayoutParams(dp(44.0f), -1));
-        bar.setContentDescription("Ask Mono, the assistant");
+        bar.setContentDescription(chatGpt ? "Ask ChatGPT" : "Ask Mono, the assistant");
         bar.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                showAssistant(false);
+                if (chatGpt) {
+                    m48lambda$54$aucommonolauncherMainActivity();
+                } else {
+                    showAssistant(false);
+                }
             }
         });
         return bar;
@@ -3187,11 +3212,15 @@ public class MainActivity extends Activity {
     }
 
     void listenForAssistant() {
+        listenFor(REQUEST_VOICE, "Ask Mono");
+    }
+
+    void listenFor(int request, String prompt) {
         Intent intent = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Ask Mono");
+        intent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, prompt);
         try {
-            startActivityForResult(intent, REQUEST_VOICE);
+            startActivityForResult(intent, request);
         } catch (Exception e) {
             toast("Voice input isn't available on this phone");
         }
@@ -3575,7 +3604,7 @@ public class MainActivity extends Activity {
     }
 
     void assistantSettings() {
-        new MonoDialog().setTitle("Assistant").setItems(new String[]{hasAssistantKey() ? "Change or remove Claude API key" : "Add Claude API key", "Clear conversation", "Robot companion"}, new DialogInterface.OnClickListener() {
+        new MonoDialog().setTitle("Assistant").setItems(new String[]{hasAssistantKey() ? "Change or remove Claude API key" : "Add Claude API key", "Clear conversation", "Robot companion", askOpensChatGpt() ? "Ask bar opens: ChatGPT" : "Ask bar opens: Mono"}, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 if (which == 0) {
@@ -3585,8 +3614,12 @@ public class MainActivity extends Activity {
                         assistant().clear();
                         toast("Conversation cleared");
                     }
-                } else {
+                } else if (which == 2) {
                     petSettings();
+                } else {
+                    prefs.edit().putString("askTarget", askOpensChatGpt() ? "mono" : "chatgpt").apply();
+                    toast(askOpensChatGpt() ? "Ask bar now opens ChatGPT" : "Ask bar now opens Mono");
+                    buildHome();
                 }
             }
         }).setNegativeButton("Back", new DialogInterface.OnClickListener() {
@@ -3600,6 +3633,15 @@ public class MainActivity extends Activity {
     @Override // android.app.Activity
     protected void onActivityResult(int i, int i2, Intent intent) {
         super.onActivityResult(i, i2, intent);
+        if (i == REQUEST_CHATGPT_VOICE) {
+            if (i2 == -1 && intent != null) {
+                ArrayList<String> heard = intent.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+                if (heard != null && !heard.isEmpty()) {
+                    askChatGpt(heard.get(0));
+                }
+            }
+            return;
+        }
         if (i == REQUEST_VOICE) {
             if (i2 == -1 && intent != null) {
                 ArrayList<String> heard = intent.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
