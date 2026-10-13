@@ -1,0 +1,29 @@
+// Robolectric checks that run the launcher's screens and the assistant loop on the JVM.
+plugins { id 'java' }
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+def androidJar = files(System.getenv('ANDROID_JAR'))
+
+sourceSets { main { java { srcDirs = ['../src'] } } }
+
+dependencies {
+    compileOnly androidJar
+    testCompileOnly androidJar
+    testRuntimeOnly androidJar
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+test {
+    systemProperty 'robolectric.enabledSdks', '35'
+    testLogging { events 'passed', 'failed'; exceptionFormat 'full' }
+}

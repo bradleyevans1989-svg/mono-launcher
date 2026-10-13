@@ -1,0 +1,48 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="17" android:versionName="0.11.0" android:compileSdkVersion="35" android:compileSdkVersionCodename="15" package="au.com.mono.launcher" platformBuildVersionCode="35" platformBuildVersionName="15">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35">
+  </uses-sdk>
+  <uses-permission android:name="android.permission.SET_WALLPAPER">
+  </uses-permission>
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS">
+  </uses-permission>
+  <uses-permission android:name="android.permission.INTERNET">
+  </uses-permission>
+  <uses-permission android:name="com.android.alarm.permission.SET_ALARM">
+  </uses-permission>
+  <queries>
+    <package android:name="com.openai.chatgpt">
+    </package>
+    <intent>
+      <action android:name="android.intent.action.MAIN">
+      </action>
+      <category android:name="android.intent.category.LAUNCHER">
+      </category>
+    </intent>
+    <intent>
+      <action android:name="android.speech.action.RECOGNIZE_SPEECH">
+      </action>
+    </intent>
+  </queries>
+  <application android:theme="@7f020000" android:label="Mono Launcher" android:icon="@7f010000" android:allowBackup="false" android:supportsRtl="true">
+    <activity android:name=".MainActivity" android:exported="true" android:launchMode="2" android:windowSoftInputMode="0x10">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN">
+        </action>
+        <category android:name="android.intent.category.HOME">
+        </category>
+        <category android:name="android.intent.category.DEFAULT">
+        </category>
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN">
+        </action>
+        <category android:name="android.intent.category.LAUNCHER">
+        </category>
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT">
+        </action>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

@@ -1,0 +1,7 @@
+build/
+dist/
+keys/
+*.pem
+smoke/.gradle/
+smoke/build/
+__pycache__/

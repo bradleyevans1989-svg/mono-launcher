@@ -1,0 +1,61 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Find Android SDK tools
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_JAR=$ANDROID_HOME/platforms/android-35/android.jar" >> "$GITHUB_ENV"
+          echo "BUILD_TOOLS=$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_ENV"
+
+      - name: Install packaging dependencies
+        run: pip install pyaxml==0.1.1 cryptography lxml
+
+      - name: Smoke tests (Robolectric)
+        working-directory: smoke
+        run: gradle test --console=plain
+
+      - name: Build APK
+        env:
+          SIGNING_KEY_PEM: ${{ secrets.MONO_SIGNING_KEY_PEM }}
+        run: |
+          if [ -n "$SIGNING_KEY_PEM" ]; then
+            printf '%s\n' "$SIGNING_KEY_PEM" > "$RUNNER_TEMP/mono-key.pem"
+            export SIGNING_KEY="$RUNNER_TEMP/mono-key.pem"
+          fi
+          D8="$BUILD_TOOLS/d8" ./build.sh | tee build-output.txt
+          echo "APK=$(tail -1 build-output.txt)" >> "$GITHUB_ENV"
+
+      - name: Verify APK with Android build tools
+        run: |
+          "$BUILD_TOOLS/apksigner" verify --verbose --min-sdk-version 26 "$APK"
+          "$BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$APK" | tail -1
+          "$BUILD_TOOLS/aapt2" dump badging "$APK" | head -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mono-launcher-apk
+          path: dist/*.apk
