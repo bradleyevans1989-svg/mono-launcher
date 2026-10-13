@@ -64,4 +64,37 @@ public class SmokeTest {
         try { a.assistantTool("add_app_to_folder", new org.json.JSONObject().put("app", "x").put("folder", "Nope")); fail(); } catch (Exception expected) {}
         assertTrue(a.assistantContext().contains("Work, Socials, AI"));
     }
+
+    @Test
+    public void droppingAppOnAppMakesFolder() {
+        MainActivity a = Robolectric.buildActivity(MainActivity.class).setup().get();
+        ShadowLooper.idleMainLooper();
+        String dragged = a.apps.get(0).id;
+        java.util.Set<String> home = a.homeIds();
+        home.add("target.app");
+        a.prefs.edit().putStringSet("homeApps", home).putInt("homePos:target.app", 15).commit();
+        assertTrue(a.putHome(a.new AppDrag(dragged, null), 15));
+        assertTrue(java.util.Arrays.asList(a.folders).contains("Folder"));
+        assertEquals(15, a.position("Folder"));
+        java.util.Set<String> inside = a.prefs.getStringSet("folder:Folder", null);
+        assertTrue(inside.contains(dragged) && inside.contains("target.app"));
+        assertFalse(a.homeIds().contains("target.app"));
+        ShadowLooper.idleMainLooper();
+    }
+
+    @Test
+    public void blockFieldRipplesAndSettles() {
+        MainActivity a = Robolectric.buildActivity(MainActivity.class).setup().get();
+        BlockField f = a.blockField;
+        assertNotNull(f);
+        f.layout(0, 0, 1080, 2400);
+        assertTrue(f.cols > 0 && f.rows > 0);
+        f.poke(540, 1200, 1f);
+        assertTrue(f.moving);
+        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(1080, 2400, android.graphics.Bitmap.Config.ARGB_8888);
+        f.draw(new android.graphics.Canvas(b));
+        boolean still = true;
+        for (int k = 0; k < 2000 && still; k++) still = f.step(1f / 60f);
+        assertFalse("field comes to rest", still);
+    }
 }

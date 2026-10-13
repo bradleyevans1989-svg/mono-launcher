@@ -33,6 +33,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -132,6 +133,7 @@ public class MainActivity extends Activity {
     FrameLayout root;
     Bitmap wallpaperBitmap;
     ImageView wallpaperView;
+    BlockField blockField;
     ArrayList<App> apps = new ArrayList<>();
     Handler handler = new Handler();
     int batteryPercent = -1;
@@ -397,6 +399,9 @@ public class MainActivity extends Activity {
         if (this.pet != null) {
             this.pet.setActive(true);
         }
+        if (this.blockField != null) {
+            this.blockField.setPaused(false);
+        }
         if (!this.appsLoading && (this.apps.isEmpty() || this.refreshFailures > 0 || SystemClock.elapsedRealtime() - this.lastAppRefresh > 300000)) {
             refreshApps();
         }
@@ -420,6 +425,9 @@ public class MainActivity extends Activity {
         this.resumed = false;
         if (this.pet != null) {
             this.pet.setActive(false);
+        }
+        if (this.blockField != null) {
+            this.blockField.setPaused(true);
         }
         this.handler.removeCallbacks(this.ticker);
     }
@@ -600,6 +608,15 @@ public class MainActivity extends Activity {
         }
 
         @Override // android.view.ViewGroup
+        public boolean dispatchTouchEvent(MotionEvent motionEvent) {
+            BlockField field = MainActivity.this.blockField;
+            if (field != null && MainActivity.this.drawer == null && MainActivity.this.wallpaperView.getDrawable() == null) {
+                field.touch(motionEvent);
+            }
+            return super.dispatchTouchEvent(motionEvent);
+        }
+
+        @Override // android.view.ViewGroup
         public boolean onInterceptTouchEvent(MotionEvent motionEvent) {
             if (motionEvent.getActionMasked() == 0) {
                 this.startX = motionEvent.getX();
@@ -637,6 +654,44 @@ public class MainActivity extends Activity {
                 this.swiping = false;
             }
             return true;
+        }
+    }
+
+    /** Every popup gets the launcher's rounded, softly lit panel instead of the stock grey square. */
+    class MonoDialog extends AlertDialog.Builder {
+        MonoDialog() {
+            super(MainActivity.this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
+        }
+
+        @Override
+        public AlertDialog create() {
+            AlertDialog dialog = super.create();
+            GradientDrawable panel = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{-15521731, -16116186});
+            panel.setCornerRadius(dp(28.0f));
+            panel.setStroke(dp(1.0f), 1148380143);
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new InsetDrawable(panel, dp(20.0f), dp(16.0f), dp(20.0f), dp(16.0f)));
+                dialog.getWindow().setDimAmount(0.55f);
+            }
+            final AlertDialog shown = dialog;
+            dialog.setOnShowListener(new DialogInterface.OnShowListener() {
+                @Override
+                public void onShow(DialogInterface dialogInterface) {
+                    MainActivity.this.styleButtons(shown);
+                }
+            });
+            return dialog;
+        }
+    }
+
+    void styleButtons(AlertDialog dialog) {
+        for (int which = -3; which <= -1; which++) {
+            android.widget.Button button = dialog.getButton(which);
+            if (button != null) {
+                button.setTextColor(ACCENT);
+                button.setAllCaps(false);
+                button.setTextSize(15.0f);
+            }
         }
     }
 
@@ -693,7 +748,9 @@ public class MainActivity extends Activity {
         this.root = new HomeSurface();
         getWindow().setBackgroundDrawable(new ColorDrawable(0));
         getWindow().addFlags(1048576);
-        this.root.addView(new Backdrop(), new FrameLayout.LayoutParams(-1, -1));
+        this.blockField = new BlockField(this);
+        this.blockField.setPaused(!this.resumed);
+        this.root.addView(this.blockField, new FrameLayout.LayoutParams(-1, -1));
         this.wallpaperView = new ImageView(this);
         this.wallpaperView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         this.root.addView(this.wallpaperView, new FrameLayout.LayoutParams(-1, -1));
@@ -920,7 +977,7 @@ public class MainActivity extends Activity {
     void manageFolders() {
         String[] strArr = (String[]) Arrays.copyOf(this.folders, this.folders.length + 1);
         strArr[this.folders.length] = "＋ New folder";
-        new AlertDialog.Builder(this).setTitle("Folders").setItems(strArr, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda58
+        new MonoDialog().setTitle("Folders").setItems(strArr, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda58
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
                 MainActivity.this.m6lambda$10$aucommonolauncherMainActivity(dialogInterface, i);
@@ -929,7 +986,7 @@ public class MainActivity extends Activity {
     }
 
     void folderOptions(final String str) {
-        new AlertDialog.Builder(this).setTitle(str).setItems(new String[]{"Choose apps", "Rename", "Move to position", "Delete folder"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda37
+        new MonoDialog().setTitle(str).setItems(new String[]{"Choose apps", "Rename", "Move to position", "Delete folder"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda37
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
                 MainActivity.this.m7lambda$11$aucommonolauncherMainActivity(str, dialogInterface, i);
@@ -950,7 +1007,7 @@ public class MainActivity extends Activity {
             for (int i2 = 0; i2 < 16; i2++) {
                 strArr[i2] = "Row " + ((i2 / 4) + 1) + ", column " + ((i2 % 4) + 1);
             }
-            new AlertDialog.Builder(this).setTitle("Move " + str).setItems(strArr, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda68
+            new MonoDialog().setTitle("Move " + str).setItems(strArr, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda68
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface2, int i3) {
                     MainActivity.this.m8lambda$12$aucommonolauncherMainActivity(str, dialogInterface2, i3);
@@ -958,7 +1015,7 @@ public class MainActivity extends Activity {
             }).show();
         }
         if (i == 3) {
-            new AlertDialog.Builder(this).setTitle("Delete " + str + "?").setMessage("Only this folder is removed. Its apps stay installed.").setPositiveButton("Delete", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda69
+            new MonoDialog().setTitle("Delete " + str + "?").setMessage("Only this folder is removed. Its apps stay installed.").setPositiveButton("Delete", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda69
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface2, int i3) {
                     MainActivity.this.m9lambda$13$aucommonolauncherMainActivity(str, dialogInterface2, i3);
@@ -985,6 +1042,7 @@ public class MainActivity extends Activity {
 
     /* renamed from: lambda$14$au-com-mono-launcher-MainActivity, reason: not valid java name */
     /* synthetic */ void m10lambda$14$aucommonolauncherMainActivity(final AlertDialog alertDialog, final EditText editText, final String str, DialogInterface dialogInterface) {
+        styleButtons(alertDialog);
         alertDialog.getButton(-1).setOnClickListener(new View.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda63
             @Override // android.view.View.OnClickListener
             public final void onClick(View view) {
@@ -1046,7 +1104,7 @@ public class MainActivity extends Activity {
         if (str != null) {
             editText.setText(str);
         }
-        final AlertDialog create = new AlertDialog.Builder(this).setTitle(str == null ? "New folder" : "Rename folder").setView(editText).setPositiveButton("Save", (DialogInterface.OnClickListener) null).setNegativeButton("Cancel", (DialogInterface.OnClickListener) null).create();
+        final AlertDialog create = new MonoDialog().setTitle(str == null ? "New folder" : "Rename folder").setView(editText).setPositiveButton("Save", (DialogInterface.OnClickListener) null).setNegativeButton("Cancel", (DialogInterface.OnClickListener) null).create();
         create.setOnShowListener(new DialogInterface.OnShowListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda14
             @Override // android.content.DialogInterface.OnShowListener
             public final void onShow(DialogInterface dialogInterface) {
@@ -1131,6 +1189,33 @@ public class MainActivity extends Activity {
         edit.apply();
     }
 
+    /** Dropping an app onto another home screen app puts both in a new folder where the target was. */
+    void makeFolder(AppDrag appDrag, String target, int position) {
+        String name = "Folder";
+        for (int n = 2; Arrays.asList(this.folders).contains(name); n++) {
+            name = "Folder " + n;
+        }
+        HashSet<String> apps = new HashSet<>();
+        apps.add(target);
+        apps.add(appDrag.id);
+        Set<String> homeIds = homeIds();
+        homeIds.remove(target);
+        this.prefs.edit().putStringSet("homeApps", homeIds).remove("homePos:" + target).remove("homeLabel:" + target)
+                .putStringSet("folder:" + name, apps).putInt("folderPos:" + name, position).apply();
+        ArrayList<String> names = new ArrayList<>(Arrays.asList(this.folders));
+        names.add(name);
+        this.folders = names.toArray(new String[0]);
+        saveFolders();
+        removeAppOrigin(appDrag, false);
+        final String created = name;
+        this.handler.post(new Runnable() {
+            @Override
+            public void run() {
+                MainActivity.this.nameFolder(created);
+            }
+        });
+    }
+
     boolean putHome(AppDrag appDrag, int i) {
         int i2 = appDrag.home ? this.prefs.getInt("homePos:" + appDrag.id, -1) : -1;
         String str = null;
@@ -1144,6 +1229,10 @@ public class MainActivity extends Activity {
             if (!str4.equals(appDrag.id) && this.prefs.getInt("homePos:" + str4, 0) == i) {
                 str = str4;
             }
+        }
+        if (str != null && find(appDrag.id) != null) {
+            makeFolder(appDrag, str, i);
+            return true;
         }
         if (!(str2 == null && str == null) && i2 < 0) {
             toast("Drop onto an empty space or into a folder");
@@ -1875,7 +1964,7 @@ public class MainActivity extends Activity {
     }
 
     void chooseSlot(final String str) {
-        new AlertDialog.Builder(this).setTitle(String.valueOf(str) + " shortcut").setItems(new String[]{"Choose an app", "Use a website address"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda20
+        new MonoDialog().setTitle(String.valueOf(str) + " shortcut").setItems(new String[]{"Choose an app", "Use a website address"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda20
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
                 MainActivity.this.m24lambda$29$aucommonolauncherMainActivity(str, dialogInterface, i);
@@ -1902,7 +1991,7 @@ public class MainActivity extends Activity {
         if (string.startsWith("url:")) {
             editText.setText(string.substring(4));
         }
-        new AlertDialog.Builder(this).setTitle("Website for " + str).setView(editText).setPositiveButton("Save", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda45
+        new MonoDialog().setTitle("Website for " + str).setView(editText).setPositiveButton("Save", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda45
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface2, int i2) {
                 MainActivity.this.m27lambda$31$aucommonolauncherMainActivity(editText, str, dialogInterface2, i2);
@@ -2155,7 +2244,7 @@ public class MainActivity extends Activity {
 
     /* renamed from: lambda$33$au-com-mono-launcher-MainActivity, reason: not valid java name */
     /* synthetic */ void m29lambda$33$aucommonolauncherMainActivity(View view) {
-        new AlertDialog.Builder(this).setTitle("Include all recent apps?").setMessage("Enable Usage access for Mono Launcher on the next screen. Without it, this list shows apps opened through Mono. Usage information stays on your phone.").setPositiveButton("Open settings", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda12
+        new MonoDialog().setTitle("Include all recent apps?").setMessage("Enable Usage access for Mono Launcher on the next screen. Without it, this list shows apps opened through Mono. Usage information stays on your phone.").setPositiveButton("Open settings", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda12
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
                 MainActivity.this.m30lambda$34$aucommonolauncherMainActivity(dialogInterface, i);
@@ -2511,7 +2600,7 @@ public class MainActivity extends Activity {
     }
 
     void appOptions(final App app, final String str) {
-        new AlertDialog.Builder(this).setTitle(app.label).setItems(str == null ? new String[]{"App info", "Assign to home shortcut", "Add to folder"} : new String[]{"App info", "Assign to home shortcut", "Add to folder", "Remove from this folder"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda39
+        new MonoDialog().setTitle(app.label).setItems(str == null ? new String[]{"App info", "Assign to home shortcut", "Add to folder"} : new String[]{"App info", "Assign to home shortcut", "Add to folder", "Remove from this folder"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda39
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
                 MainActivity.this.m41lambda$45$aucommonolauncherMainActivity(app, str, dialogInterface, i);
@@ -2526,7 +2615,7 @@ public class MainActivity extends Activity {
         }
         if (i == 1) {
             final String[] shortcutKeys = shortcutKeys();
-            new AlertDialog.Builder(this).setItems(shortcutKeys, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda28
+            new MonoDialog().setItems(shortcutKeys, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda28
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface2, int i2) {
                     MainActivity.this.m42lambda$46$aucommonolauncherMainActivity(shortcutKeys, app, dialogInterface2, i2);
@@ -2534,7 +2623,7 @@ public class MainActivity extends Activity {
             }).show();
         }
         if (i == 2) {
-            new AlertDialog.Builder(this).setTitle("Add to folder").setItems(this.folders, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda29
+            new MonoDialog().setTitle("Add to folder").setItems(this.folders, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda29
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface2, int i2) {
                     MainActivity.this.m43lambda$47$aucommonolauncherMainActivity(app, dialogInterface2, i2);
@@ -2568,7 +2657,7 @@ public class MainActivity extends Activity {
     void syncWallpaper(boolean z) {
         Bitmap bitmap;
         final String string = this.prefs.getString("wallpaper", "");
-        final String str = "mono-v1:" + string;
+        final String str = "mono-v2:" + string;
         if (z || !str.equals(this.prefs.getString("systemWallpaper", ""))) {
             final WallpaperManager wallpaperManager = WallpaperManager.getInstance(this);
             if (!wallpaperManager.isWallpaperSupported() || !wallpaperManager.isSetWallpaperAllowed()) {
@@ -2581,9 +2670,9 @@ public class MainActivity extends Activity {
             final int max = (int) ((displayMetrics.heightPixels * min) / Math.max(1, displayMetrics.widthPixels));
             if (string.isEmpty()) {
                 bitmap = Bitmap.createBitmap(min, max, Bitmap.Config.ARGB_8888);
-                Backdrop backdrop = new Backdrop();
-                backdrop.layout(0, 0, min, max);
-                backdrop.draw(new Canvas(bitmap));
+                BlockField still = new BlockField(this);
+                still.layout(0, 0, min, max);
+                still.draw(new Canvas(bitmap));
             } else {
                 bitmap = null;
             }
@@ -2715,7 +2804,7 @@ public class MainActivity extends Activity {
             strArr[i] = ((App) arrayList.get(i)).label;
             zArr[i] = hashSet.contains(((App) arrayList.get(i)).id);
         }
-        new AlertDialog.Builder(this).setTitle("Apps in " + str).setMultiChoiceItems(strArr, zArr, new DialogInterface.OnMultiChoiceClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda26
+        new MonoDialog().setTitle("Apps in " + str).setMultiChoiceItems(strArr, zArr, new DialogInterface.OnMultiChoiceClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda26
             @Override // android.content.DialogInterface.OnMultiChoiceClickListener
             public final void onClick(DialogInterface dialogInterface, int i2, boolean z) {
                 MainActivity.lambda$52(hashSet, arrayList, dialogInterface, i2, z);
@@ -3086,7 +3175,7 @@ public class MainActivity extends Activity {
         field.setHint("sk-ant-…");
         field.setSingleLine();
         field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+        AlertDialog.Builder builder = new MonoDialog()
                 .setTitle("Claude API key")
                 .setMessage("Paste a key from console.anthropic.com. It's encrypted on this phone and only sent to Anthropic when you ask Mono something. Usage is billed to your Anthropic account.")
                 .setView(field)
@@ -3300,7 +3389,7 @@ public class MainActivity extends Activity {
     }
 
     void petSettings() {
-        new AlertDialog.Builder(this).setTitle("Your robot companion").setItems(new String[]{"Show a fact now", this.prefs.getBoolean("petFacts", true) ? "Turn random facts off" : "Turn random facts on", this.prefs.getBoolean("petEnabled", true) ? "Hide pet" : "Show pet", "Reset position"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda33
+        new MonoDialog().setTitle("Your robot companion").setItems(new String[]{"Show a fact now", this.prefs.getBoolean("petFacts", true) ? "Turn random facts off" : "Turn random facts on", this.prefs.getBoolean("petEnabled", true) ? "Hide pet" : "Show pet", "Reset position"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda33
             @Override // android.content.DialogInterface.OnClickListener
             public final void onClick(DialogInterface dialogInterface, int i) {
                 MainActivity.this.m51lambda$57$aucommonolauncherMainActivity(dialogInterface, i);
@@ -3359,7 +3448,7 @@ public class MainActivity extends Activity {
             syncWallpaper(true);
         }
         if (i == 3) {
-            new AlertDialog.Builder(this).setTitle("Icon size").setItems(new String[]{"Small", "Medium", "Large"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda15
+            new MonoDialog().setTitle("Icon size").setItems(new String[]{"Small", "Medium", "Large"}, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda15
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface2, int i2) {
                     MainActivity.this.m53lambda$59$aucommonolauncherMainActivity(dialogInterface2, i2);
@@ -3383,7 +3472,7 @@ public class MainActivity extends Activity {
         }
         if (i == 10) {
             final String[] shortcutKeys = shortcutKeys();
-            new AlertDialog.Builder(this).setItems(shortcutKeys, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda16
+            new MonoDialog().setItems(shortcutKeys, new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda16
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface2, int i2) {
                     MainActivity.this.m55lambda$60$aucommonolauncherMainActivity(shortcutKeys, dialogInterface2, i2);
@@ -3400,7 +3489,7 @@ public class MainActivity extends Activity {
             toast("Refreshing apps and icons");
         }
         if (i == 6) {
-            new AlertDialog.Builder(this).setTitle("Your Mono home").setMessage("Ask Mono: tap the Ask bar or the robot to talk to the assistant. It can answer questions, open apps, set timers and alarms, and add apps to folders. Tap the mic to ask by voice. It needs your own Claude API key (Settings, Assistant).\n\nSwipe up anywhere for All apps, down for Recent apps, right for the Clock and left for the learning page.\n\nHold an app in All apps, then drag it onto a folder or a free space. Hold and drag folders to move them. Drop anything on the Remove bin to take it off the home screen (apps stay installed). Open a folder and use Folder options to rename or delete it.\n\nHold empty home space or the clock for settings. Long press a dock or shortcut slot to change it; Impact Hub can be an app, a website or a browser shortcut.\n\nThird-party widgets and work or private profile apps aren't supported yet. To switch back, open Set as default home and choose your previous launcher.").setPositiveButton("Got it", (DialogInterface.OnClickListener) null).show();
+            new MonoDialog().setTitle("Your Mono home").setMessage("Ask Mono: tap the Ask bar or the robot to talk to the assistant. It can answer questions, open apps, set timers and alarms, and add apps to folders. Tap the mic to ask by voice. It needs your own Claude API key (Settings, Assistant).\n\nSwipe up anywhere for All apps, down for Recent apps, right for the Clock and left for the learning page.\n\nHold an app in All apps, then drag it onto a folder or a free space. Hold and drag folders to move them. Drop anything on the Remove bin to take it off the home screen (apps stay installed). Open a folder and use Folder options to rename or delete it.\n\nHold empty home space or the clock for settings. Long press a dock or shortcut slot to change it; Impact Hub can be an app, a website or a browser shortcut.\n\nThird-party widgets and work or private profile apps aren't supported yet. To switch back, open Set as default home and choose your previous launcher.").setPositiveButton("Got it", (DialogInterface.OnClickListener) null).show();
         }
     }
 
@@ -3424,7 +3513,7 @@ public class MainActivity extends Activity {
     }
 
     void settings() {
-        new AlertDialog.Builder(this).setTitle("Mono Launcher " + versionName()).setItems(new String[]{"Assistant", "Home screen", "Wallpaper", "Set as default home", "Phone settings", "How to use"}, new DialogInterface.OnClickListener() {
+        new MonoDialog().setTitle("Mono Launcher " + versionName()).setItems(new String[]{"Assistant", "Home screen", "Wallpaper", "Set as default home", "Phone settings", "How to use"}, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 if (which == 0) {
@@ -3445,7 +3534,7 @@ public class MainActivity extends Activity {
     }
 
     void settingsGroup(String title, String[] labels, final int[] actions) {
-        new AlertDialog.Builder(this).setTitle(title).setItems(labels, new DialogInterface.OnClickListener() {
+        new MonoDialog().setTitle(title).setItems(labels, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 MainActivity.this.m52lambda$58$aucommonolauncherMainActivity(dialog, actions[which]);
@@ -3459,7 +3548,7 @@ public class MainActivity extends Activity {
     }
 
     void assistantSettings() {
-        new AlertDialog.Builder(this).setTitle("Assistant").setItems(new String[]{hasAssistantKey() ? "Change or remove Claude API key" : "Add Claude API key", "Clear conversation", "Robot companion"}, new DialogInterface.OnClickListener() {
+        new MonoDialog().setTitle("Assistant").setItems(new String[]{hasAssistantKey() ? "Change or remove Claude API key" : "Add Claude API key", "Clear conversation", "Robot companion"}, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 if (which == 0) {
@@ -3514,7 +3603,7 @@ public class MainActivity extends Activity {
         final LauncherApps.PinItemRequest pinItemRequest;
         if ("android.content.pm.action.CONFIRM_PIN_SHORTCUT".equals(intent.getAction()) && (pinItemRequest = this.launcher.getPinItemRequest(intent)) != null && pinItemRequest.isValid() && pinItemRequest.getShortcutInfo() != null) {
             final ShortcutInfo shortcutInfo = pinItemRequest.getShortcutInfo();
-            new AlertDialog.Builder(this).setTitle("Add " + ((Object) shortcutInfo.getShortLabel()) + "?").setMessage("Use this shortcut for Impact Hub on your Mono home screen?").setPositiveButton("Add", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda46
+            new MonoDialog().setTitle("Add " + ((Object) shortcutInfo.getShortLabel()) + "?").setMessage("Use this shortcut for Impact Hub on your Mono home screen?").setPositiveButton("Add", new DialogInterface.OnClickListener() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda46
                 @Override // android.content.DialogInterface.OnClickListener
                 public final void onClick(DialogInterface dialogInterface, int i) {
                     MainActivity.this.m56lambda$61$aucommonolauncherMainActivity(pinItemRequest, shortcutInfo, dialogInterface, i);
@@ -3970,28 +4059,4 @@ public class MainActivity extends Activity {
         }
     }
 
-    class Backdrop extends View {
-        Paint p;
-
-        Backdrop() {
-            super(MainActivity.this);
-            this.p = new Paint(3);
-        }
-
-        @Override // android.view.View
-        protected void onDraw(Canvas canvas) {
-            float width = getWidth();
-            float height = getHeight();
-            this.p.setShader(new LinearGradient(0.0f, 0.0f, width, height, new int[]{-16048591, -15583153, -16180178}, (float[]) null, Shader.TileMode.CLAMP));
-            canvas.drawRect(0.0f, 0.0f, width, height, this.p);
-            float f = width * 1.4f;
-            float f2 = height * 0.35f;
-            float f3 = width * 1.2f;
-            this.p.setShader(new RadialGradient(f, f2, f3, new int[]{-14983048, -15580325, -16047818}, new float[]{0.0f, 0.8f, 1.0f}, Shader.TileMode.CLAMP));
-            canvas.drawCircle(f, f2, f3, this.p);
-            this.p.setShader(new LinearGradient(0.0f, height * 0.7f, width, height, -15317412, -16048074, Shader.TileMode.CLAMP));
-            canvas.drawOval((-width) * 0.7f, height * 0.64f, width * 0.8f, height * 1.25f, this.p);
-            this.p.setShader(null);
-        }
-    }
 }
