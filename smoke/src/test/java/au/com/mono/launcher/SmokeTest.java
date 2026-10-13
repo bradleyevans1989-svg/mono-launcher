@@ -69,7 +69,8 @@ public class SmokeTest {
     public void droppingAppOnAppMakesFolder() {
         MainActivity a = Robolectric.buildActivity(MainActivity.class).setup().get();
         ShadowLooper.idleMainLooper();
-        String dragged = a.apps.get(0).id;
+        String dragged = "test.pkg/.Main";
+        a.apps.add(a.new App(dragged, "Test", android.graphics.Bitmap.createBitmap(8, 8, android.graphics.Bitmap.Config.ARGB_8888)));
         java.util.Set<String> home = a.homeIds();
         home.add("target.app");
         a.prefs.edit().putStringSet("homeApps", home).putInt("homePos:target.app", 15).commit();
