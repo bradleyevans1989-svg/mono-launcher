@@ -2864,7 +2864,7 @@ public class MainActivity extends Activity {
         hint.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         hint.setTextColor(-4598813);
         bar.addView(hint, new LinearLayout.LayoutParams(0, -1, 1.0f));
-        TextView mic = text("🎙", 18);
+        View mic = micButton();
         mic.setContentDescription("Ask by voice");
         mic.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -2881,6 +2881,33 @@ public class MainActivity extends Activity {
             }
         });
         return bar;
+    }
+
+    /** A line-drawn microphone in the accent colour, sized to sit at the end of an input bar. */
+    View micButton() {
+        return new View(this) {
+            final Paint ink = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                float unit = dp(22.0f) / 24.0f;
+                canvas.save();
+                canvas.translate((getWidth() - dp(22.0f)) / 2.0f, (getHeight() - dp(22.0f)) / 2.0f);
+                canvas.scale(unit, unit);
+                this.ink.setStyle(Paint.Style.FILL);
+                this.ink.setColor(ACCENT & 0x00ffffff | 0x33000000);
+                canvas.drawRoundRect(8.5f, 2.5f, 15.5f, 14.5f, 3.5f, 3.5f, this.ink);
+                this.ink.setStyle(Paint.Style.STROKE);
+                this.ink.setStrokeWidth(1.8f);
+                this.ink.setStrokeCap(Paint.Cap.ROUND);
+                this.ink.setColor(ACCENT);
+                canvas.drawRoundRect(8.5f, 2.5f, 15.5f, 14.5f, 3.5f, 3.5f, this.ink);
+                canvas.drawArc(5.5f, 5.0f, 18.5f, 17.5f, 0.0f, 180.0f, false, this.ink);
+                canvas.drawLine(12.0f, 17.5f, 12.0f, 21.0f, this.ink);
+                canvas.drawLine(9.0f, 21.0f, 15.0f, 21.0f, this.ink);
+                canvas.restore();
+            }
+        };
     }
 
     void showAssistant(boolean voice) {
@@ -2931,7 +2958,7 @@ public class MainActivity extends Activity {
         field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEND);
         field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         input.addView(field, new LinearLayout.LayoutParams(0, -2, 1.0f));
-        TextView mic = text("🎙", 18);
+        View mic = micButton();
         mic.setContentDescription("Ask by voice");
         input.addView(mic, new LinearLayout.LayoutParams(dp(44.0f), dp(48.0f)));
         final TextView send = text("➤", 20);

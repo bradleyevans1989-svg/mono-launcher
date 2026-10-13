@@ -71,7 +71,7 @@ final class LauncherPet extends View {
                     if (LauncherPet.this.speakingEnabled) {
                         LauncherPet.this.showFact();
                     }
-                    LauncherPet.this.postDelayed(this, 180000L);
+                    LauncherPet.this.postDelayed(this, 30000L);
                 }
             }
         };
@@ -108,7 +108,7 @@ final class LauncherPet extends View {
             }
             removeCallbacks(this.greet);
             this.scheduled = true;
-            postDelayed(this.greet, 3000L);
+            postDelayed(this.greet, 30000L);
             return;
         }
         removeCallbacks(this.frame);
@@ -266,7 +266,7 @@ final class LauncherPet extends View {
         }
         this.bubble.setY(Math.max(dp(38.0f), Math.min((frameLayout.getHeight() - this.bubble.getMeasuredHeight()) - dp(38.0f), y)));
         removeCallbacks(this.hideBubble);
-        postDelayed(this.hideBubble, 14000L);
+        postDelayed(this.hideBubble, 9000L);
     }
 
     /* renamed from: lambda$2$au-com-mono-launcher-LauncherPet, reason: not valid java name */
@@ -304,12 +304,16 @@ final class LauncherPet extends View {
         canvas.drawCircle(40.0f, 12.0f, 4.0f, this.ink);
         this.ink.setColor(-14518902);
         canvas.drawRoundRect(22.0f, 54.0f, 58.0f, 72.0f, 9.0f, 9.0f, this.ink);
-        canvas.drawRoundRect(14.0f, 49.0f, 23.0f, 65.0f, 4.0f, 4.0f, this.ink);
-        canvas.save();
-        canvas.rotate(z ? (((float) Math.sin(16.0f * f)) * 22.0f) - 140.0f : 0.0f, 62.0f, 56.0f);
-        canvas.drawRoundRect(59.0f, 53.0f, 67.0f, 72.0f, 4.0f, 4.0f, this.ink);
+        // Two matching arms hang from the shoulders; the right one swings up to wave.
+        canvas.drawRoundRect(14.0f, 54.0f, 21.0f, 67.0f, 3.5f, 3.5f, this.ink);
         this.ink.setColor(-6424337);
-        canvas.drawCircle(63.0f, 71.0f, 5.0f, this.ink);
+        canvas.drawCircle(17.5f, 67.5f, 3.5f, this.ink);
+        canvas.save();
+        canvas.rotate(z ? (((float) Math.sin(16.0f * f)) * 22.0f) - 140.0f : 0.0f, 62.5f, 56.0f);
+        this.ink.setColor(-14518902);
+        canvas.drawRoundRect(59.0f, 54.0f, 66.0f, 67.0f, 3.5f, 3.5f, this.ink);
+        this.ink.setColor(-6424337);
+        canvas.drawCircle(62.5f, 67.5f, 3.5f, this.ink);
         canvas.restore();
         this.ink.setColor(-9708051);
         canvas.drawRoundRect(12.0f, 22.0f, 68.0f, 59.0f, 14.0f, 14.0f, this.ink);
