@@ -1,31 +1,35 @@
 // Robolectric checks that run the launcher's screens and the assistant loop on the JVM.
-plugins { id 'java' }
+// Only used for tests: the shipped APK is built by ../build.sh.
+plugins { id 'com.android.application' version '8.7.3' }
 
-repositories {
-    google()
-    mavenCentral()
+android {
+    namespace 'au.com.mono.launcher'
+    compileSdk 35
+    defaultConfig {
+        minSdk 26
+        targetSdk 35
+    }
+    sourceSets {
+        main {
+            java.srcDirs = ['../src']
+            assets.srcDirs = ['../assets']
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            systemProperty 'robolectric.enabledSdks', '35'
+            testLogging { events 'passed', 'failed'; exceptionFormat 'full' }
+        }
+    }
 }
-
-def androidJar = files(System.getenv('ANDROID_JAR'))
-
-sourceSets { main { java { srcDirs = ['../src'] } } }
 
 dependencies {
-    compileOnly androidJar
-    testCompileOnly androidJar
-    testRuntimeOnly androidJar
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
-    testImplementation 'androidx.test:monitor:1.7.2'
     testImplementation 'androidx.test:core:1.6.1'
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.release = 17
-}
-
-test {
-    systemProperty 'robolectric.enabledSdks', '35'
-    testLogging { events 'passed', 'failed'; exceptionFormat 'full' }
 }

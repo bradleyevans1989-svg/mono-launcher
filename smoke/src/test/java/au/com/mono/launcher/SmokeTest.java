@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 35, manifest = Config.NONE)
+@Config(sdk = 35)
 public class SmokeTest {
     static boolean hasText(View v, String s) {
         if (v instanceof TextView && ((TextView) v).getText().toString().contains(s)) return true;

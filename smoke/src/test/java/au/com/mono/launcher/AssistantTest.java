@@ -6,7 +6,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 @org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner.class)
-@org.robolectric.annotation.Config(sdk = 35, manifest = org.robolectric.annotation.Config.NONE)
+@org.robolectric.annotation.Config(sdk = 35)
 public class AssistantTest {
     @org.junit.Test
     public void scriptedConversations() throws Exception {

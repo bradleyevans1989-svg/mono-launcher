@@ -36,7 +36,7 @@ jobs:
 
       - name: Smoke tests (Robolectric)
         working-directory: smoke
-        run: gradle test --console=plain
+        run: gradle testDebugUnitTest --console=plain
 
       - name: Build APK
         env:
