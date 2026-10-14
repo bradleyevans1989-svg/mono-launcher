@@ -3418,7 +3418,11 @@ public class MainActivity extends Activity {
         this.pet = new LauncherPet(this, new Runnable() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda30
             @Override // java.lang.Runnable
             public final void run() {
-                MainActivity.this.showAssistant(false);
+                if (MainActivity.this.askOpensChatGpt()) {
+                    MainActivity.this.m48lambda$54$aucommonolauncherMainActivity();
+                } else {
+                    MainActivity.this.showAssistant(false);
+                }
             }
         }, new LauncherPet.Moved() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda31
             @Override // au.com.mono.launcher.LauncherPet.Moved
@@ -3620,7 +3624,7 @@ public class MainActivity extends Activity {
     }
 
     void assistantSettings() {
-        new MonoDialog().setTitle("Assistant").setItems(new String[]{hasAssistantKey() ? "Change or remove Claude API key" : "Add Claude API key", "Clear conversation", "Robot companion", askOpensChatGpt() ? "Ask bar opens: ChatGPT" : "Ask bar opens: Mono"}, new DialogInterface.OnClickListener() {
+        new MonoDialog().setTitle("Assistant").setItems(new String[]{hasAssistantKey() ? "Change or remove Claude API key" : "Add Claude API key", "Clear conversation", "Robot companion", askOpensChatGpt() ? "Ask bar and robot open: ChatGPT" : "Ask bar and robot open: Mono"}, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 if (which == 0) {
@@ -3634,7 +3638,7 @@ public class MainActivity extends Activity {
                     petSettings();
                 } else {
                     prefs.edit().putString("askTarget", askOpensChatGpt() ? "mono" : "chatgpt").apply();
-                    toast(askOpensChatGpt() ? "Ask bar now opens ChatGPT" : "Ask bar now opens Mono");
+                    toast(askOpensChatGpt() ? "Ask bar and robot now open ChatGPT" : "Ask bar and robot now open Mono");
                     buildHome();
                 }
             }

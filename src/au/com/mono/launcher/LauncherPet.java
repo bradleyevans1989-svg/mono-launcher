@@ -88,7 +88,7 @@ final class LauncherPet extends View {
         };
         this.moved = moved;
         this.slop = ViewConfiguration.get(context).getScaledTouchSlop();
-        setContentDescription("Mono assistant. Tap the robot to ask Mono; drag to move.");
+        setContentDescription("Robot companion. Tap to ask; drag to move.");
         setClickable(true);
         setFocusable(true);
         setOnClickListener(new View.OnClickListener() { // from class: au.com.mono.launcher.LauncherPet$$ExternalSyntheticLambda2
