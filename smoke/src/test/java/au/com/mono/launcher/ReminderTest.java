@@ -73,7 +73,7 @@ public class ReminderTest {
         assertEquals(2, n.actions.length);
         assertTrue(Reminders.all(context).get(0).ringing);
 
-        Shadows.shadowOf(nm).cancel(item.id);
+        nm.cancel(item.id);
         Reminders.dismissed(context, item.id);
         assertNotNull("comes back after a swipe", Shadows.shadowOf(nm).getNotification(item.id));
 
