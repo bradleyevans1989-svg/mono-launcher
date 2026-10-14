@@ -2985,6 +2985,37 @@ public class MainActivity extends Activity {
         };
     }
 
+    /**
+     * Walks through turning on notification access. Phones hide or grey out this switch for apps
+     * installed from a file rather than the Play Store until "Allow restricted settings" is turned on
+     * in the app's info page, so that comes first.
+     */
+    void notificationAccessHelp() {
+        String message = notificationRipplesOn()
+                ? "Notification ripples are on. To stop them, turn Mono Launcher off in the notification access list."
+                : "1. Tap App info, then the ⋮ menu at the top right, and choose Allow restricted settings. If that option isn't there, skip this step.\n\n"
+                + "2. Come back here and tap Notification access. Find Mono Launcher in the list and turn it on.\n\n"
+                + "Mono only sees which app sent a notification, never what it says.";
+        new MonoDialog().setTitle("Notification ripples").setMessage(message)
+                .setPositiveButton("Notification access", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        try {
+                            startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
+                        } catch (Exception e) {
+                            safeStart(new Intent("android.settings.SETTINGS"));
+                        }
+                    }
+                })
+                .setNeutralButton("App info", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        safeStart(new Intent("android.settings.APPLICATION_DETAILS_SETTINGS", Uri.parse("package:" + getPackageName())));
+                    }
+                })
+                .setNegativeButton("Close", (DialogInterface.OnClickListener) null).show();
+    }
+
     boolean notificationRipplesOn() {
         String enabled = android.provider.Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         return enabled != null && enabled.contains(getPackageName() + "/");
@@ -3926,15 +3957,7 @@ public class MainActivity extends Activity {
             syncWallpaper(true);
         }
         if (i == 21) {
-            Intent access = Build.VERSION.SDK_INT >= 30
-                    ? new Intent("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS").putExtra("android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME", new android.content.ComponentName(this, NotificationRipples.class).flattenToString())
-                    : new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
-            toast(notificationRipplesOn() ? "Turn off Mono's notification access to stop the ripples" : "Allow Mono here. It only sees which app notified, never what it says");
-            try {
-                startActivity(access);
-            } catch (Exception e) {
-                safeStart(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
-            }
+            notificationAccessHelp();
         }
         if (i == 20) {
             boolean calm = !this.prefs.getBoolean("calmBackground", false);
