@@ -5,7 +5,7 @@ Builds an APK from a compiled classes.dex, a text AndroidManifest.xml (encoded
 with pyaxml), the prebuilt resources.arsc and drawable, and assets, then signs
 it with APK Signature Scheme v2 (enough for minSdk 26).
 """
-import argparse, hashlib, struct, zipfile, io, datetime
+import argparse, hashlib, struct, sys, zipfile, io, datetime
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
@@ -47,7 +47,32 @@ def encode_manifest(xml_path):
     root = etree.parse(xml_path).getroot()
     axml = pyaxml.AXML()
     axml.from_xml(root)
-    return axml.pack()
+    data = axml.pack()
+    check_attribute_order(data)
+    return data
+
+
+def check_attribute_order(data):
+    """Android reads android: attributes assuming they are sorted by resource id, and silently
+    ignores any that are out of order (a service's permission went missing that way). pyaxml keeps
+    the XML's order, so refuse to build until AndroidManifest.xml lists them in id order."""
+    pos, resids, strings = 8, [], []
+    while pos < len(data):
+        kind, _, size = struct.unpack('<HHI', data[pos:pos + 8])
+        if kind == 0x180:
+            resids = list(struct.unpack('<%dI' % ((size - 8) // 4), data[pos + 8:pos + size]))
+        elif kind == 0x102:
+            count = struct.unpack('<H', data[pos + 28:pos + 30])[0]
+            ids = []
+            for k in range(count):
+                name = struct.unpack('<I', data[pos + 36 + k * 20 + 4:pos + 36 + k * 20 + 8])[0]
+                if name < len(resids) and resids[name]:
+                    ids.append(resids[name])
+            if ids != sorted(ids):
+                sys.exit('AndroidManifest.xml: attributes on an element are out of resource-id order %s; '
+                         'reorder them (name 0x01010003, permission 0x01010006, exported 0x01010010, ...)'
+                         % [hex(i) for i in ids])
+        pos += size
 
 
 def build_zip(entries):

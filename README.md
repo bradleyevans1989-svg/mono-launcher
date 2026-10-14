@@ -25,4 +25,4 @@ GitHub Actions (`.github/workflows/build.yml`) runs the Robolectric smoke tests 
 
 ## History
 
-0.10.2 was rebuilt from its APK (the original source wasn't available). 0.15.1 adds the assistant, regroups settings, updates window inset handling for Android 15 and slows the robot's fact bubbles to every three minutes.
+0.10.2 was rebuilt from its APK (the original source wasn't available). 0.15.2 adds the assistant, regroups settings, updates window inset handling for Android 15 and slows the robot's fact bubbles to every three minutes.
