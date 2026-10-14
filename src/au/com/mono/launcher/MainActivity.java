@@ -762,6 +762,12 @@ public class MainActivity extends Activity {
         getWindow().addFlags(1048576);
         this.blockField = new BlockField(this);
         this.blockField.lively = !this.prefs.getBoolean("calmBackground", false);
+        NotificationRipples.listener = new NotificationRipples.Listener() {
+            @Override
+            public void rippleFor(String packageName) {
+                MainActivity.this.notificationRipple(packageName);
+            }
+        };
         this.blockField.quiet = new BlockField.Quiet() {
             @Override
             public boolean quiet() {
@@ -1713,6 +1719,9 @@ public class MainActivity extends Activity {
             text2.setTypeface(Typeface.DEFAULT_BOLD);
             layoutParams = new FrameLayout.LayoutParams(-1, -1);
             textView = text2;
+        }
+        if (find != null) {
+            frameLayout.setTag("app:" + find.id);
         }
         frameLayout.addView(textView, layoutParams);
         float f = i;
@@ -2976,6 +2985,57 @@ public class MainActivity extends Activity {
         };
     }
 
+    boolean notificationRipplesOn() {
+        String enabled = android.provider.Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        return enabled != null && enabled.contains(getPackageName() + "/");
+    }
+
+    /** A notification arrived: ripple out from that app's icon if it's on the home screen, else from the top. */
+    void notificationRipple(String packageName) {
+        if (this.blockField == null || !this.resumed || this.drawer != null || this.root == null) {
+            return;
+        }
+        View icon = findAppView(this.home, packageName);
+        float x = this.blockField.getWidth() / 2.0f;
+        float y = this.blockField.getHeight() * 0.18f;
+        if (icon != null && icon.isShown()) {
+            int[] at = new int[2];
+            int[] origin = new int[2];
+            icon.getLocationInWindow(at);
+            this.blockField.getLocationInWindow(origin);
+            x = at[0] - origin[0] + icon.getWidth() / 2.0f;
+            y = at[1] - origin[1] + icon.getHeight() / 2.0f;
+        }
+        this.blockField.poke(x, y, 1.4f);
+    }
+
+    View findAppView(View view, String packageName) {
+        if (view == null) {
+            return null;
+        }
+        Object tag = view.getTag();
+        if (tag instanceof String && (((String) tag).startsWith("app:" + packageName + "/") || ((String) tag).equals("app:" + packageName))) {
+            return view;
+        }
+        if (tag instanceof String && ((String) tag).startsWith("folder:")) {
+            for (String id : this.prefs.getStringSet((String) tag, new HashSet<String>())) {
+                if (id.startsWith(packageName + "/")) {
+                    return view;
+                }
+            }
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View found = findAppView(group.getChildAt(i), packageName);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
     /** A line-drawn bell in the accent colour, matching the microphone beside it. */
     View bellButton() {
         return new View(this) {
@@ -3865,6 +3925,17 @@ public class MainActivity extends Activity {
         if (i == 7) {
             syncWallpaper(true);
         }
+        if (i == 21) {
+            Intent access = Build.VERSION.SDK_INT >= 30
+                    ? new Intent("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS").putExtra("android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME", new android.content.ComponentName(this, NotificationRipples.class).flattenToString())
+                    : new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+            toast(notificationRipplesOn() ? "Turn off Mono's notification access to stop the ripples" : "Allow Mono here. It only sees which app notified, never what it says");
+            try {
+                startActivity(access);
+            } catch (Exception e) {
+                safeStart(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
+            }
+        }
         if (i == 20) {
             boolean calm = !this.prefs.getBoolean("calmBackground", false);
             this.prefs.edit().putBoolean("calmBackground", calm).apply();
@@ -3928,7 +3999,7 @@ public class MainActivity extends Activity {
                 } else if (which == 1) {
                     settingsGroup("Home screen", new String[]{"Edit dock and shortcuts", "New folder", "Manage folders", "Icon size", "Refresh apps"}, new int[]{10, 8, 9, 3, 12});
                 } else if (which == 2) {
-                    settingsGroup("Wallpaper", new String[]{"Choose photo wallpaper", "Restore Mono wallpaper", "Sync home wallpaper", MainActivity.this.prefs.getBoolean("calmBackground", false) ? "Background motion: Calm" : "Background motion: Lively"}, new int[]{1, 2, 7, 20});
+                    settingsGroup("Wallpaper", new String[]{"Choose photo wallpaper", "Restore Mono wallpaper", "Sync home wallpaper", MainActivity.this.prefs.getBoolean("calmBackground", false) ? "Background motion: Calm" : "Background motion: Lively", MainActivity.this.notificationRipplesOn() ? "Notification ripples: On" : "Notification ripples: Off"}, new int[]{1, 2, 7, 20, 21});
                 } else if (which == 3) {
                     MainActivity.this.m52lambda$58$aucommonolauncherMainActivity(dialog, 0);
                 } else if (which == 4) {

@@ -1,6 +1,14 @@
 package au.com.mono.launcher;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.os.BatteryManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -17,8 +25,12 @@ import android.view.View;
  * lifts the blocks under it, the swell spreads outwards, overshoots and settles. Blocks brighten as
  * they rise. The view only animates while the field is moving and draws a single still frame
  * otherwise, so it costs nothing at rest.
+ *
+ * A lively field also reacts to the phone itself: tilting it sloshes the blocks towards the low
+ * side like water, the battery level shows as a glowing water line, plugging in sends up a swell,
+ * and notifications can ripple out from the app's icon.
  */
-final class BlockField extends View {
+final class BlockField extends View implements SensorEventListener {
     static final int BACKGROUND = 0xff070f1d;
     static final float[] STOPS = {0f, 0.18f, 0.4f, 0.58f, 0.76f, 1f};
     static final int[] COLORS = {0xff17596b, 0xff1f7186, 0xff46337a, 0xff6c2766, 0xff231a40, 0xff0b1428};
@@ -46,6 +58,20 @@ final class BlockField extends View {
     int rows;
     float[] z = new float[0];
     float[] v = new float[0];
+    /** Each block's position across and down the screen, -1 to 1, for the tilt slosh. */
+    float[] across = new float[0];
+    float[] down = new float[0];
+    float tiltX;
+    float tiltY;
+    float gravityX = Float.NaN;
+    float gravityY;
+    float baseX;
+    float baseY;
+    boolean listening;
+    /** Battery charge 0 to 1, or -1 before it is known. */
+    float battery = -1f;
+    boolean charging;
+    BroadcastReceiver batteryWatch;
     byte[] marks = new byte[0];
 
     boolean moving;
@@ -113,6 +139,16 @@ final class BlockField extends View {
         int n = this.cols * this.rows;
         this.z = new float[n];
         this.v = new float[n];
+        this.across = new float[n];
+        this.down = new float[n];
+        for (int a = 0; a < this.cols; a++) {
+            for (int b = 0; b < this.rows; b++) {
+                int i = a + this.i0;
+                int j = b + this.j0;
+                this.across[a * this.rows + b] = Math.max(-1f, Math.min(1f, (i - j) * half / (width / 2f)));
+                this.down[a * this.rows + b] = Math.max(-1f, Math.min(1f, (i + j) * halfH / (height / 2f) - 1f));
+            }
+        }
         this.marks = new byte[n];
         for (int a = 0; a < this.cols; a++) {
             for (int b = 0; b < this.rows; b++) {
@@ -216,10 +252,132 @@ final class BlockField extends View {
 
     void setPaused(boolean paused) {
         this.paused = paused;
+        listen(!paused && this.lively && isAttachedToWindow());
         if (!paused && (this.moving || this.lively)) {
             this.lastFrame = SystemClock.uptimeMillis();
             postInvalidateOnAnimation();
         }
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        listen(!this.paused && this.lively);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        listen(false);
+        super.onDetachedFromWindow();
+    }
+
+    /** Starts or stops following the phone's tilt and battery. */
+    void listen(boolean on) {
+        if (on == this.listening) {
+            return;
+        }
+        this.listening = on;
+        SensorManager sensors = (SensorManager) getContext().getSystemService(Context.SENSOR_SERVICE);
+        if (on) {
+            if (sensors != null) {
+                Sensor gravity = sensors.getDefaultSensor(Sensor.TYPE_GRAVITY);
+                if (gravity == null) {
+                    gravity = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+                }
+                if (gravity != null) {
+                    sensors.registerListener(this, gravity, SensorManager.SENSOR_DELAY_GAME);
+                }
+            }
+            this.batteryWatch = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    battery(intent);
+                }
+            };
+            Intent sticky = getContext().registerReceiver(this.batteryWatch, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (sticky != null) {
+                battery(sticky);
+            }
+        } else {
+            if (sensors != null) {
+                sensors.unregisterListener(this);
+            }
+            if (this.batteryWatch != null) {
+                try {
+                    getContext().unregisterReceiver(this.batteryWatch);
+                } catch (Exception e) {
+                    // Already gone.
+                }
+                this.batteryWatch = null;
+            }
+            this.gravityX = Float.NaN;
+            this.tiltX = 0f;
+            this.tiltY = 0f;
+        }
+    }
+
+    void battery(Intent intent) {
+        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+        int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        boolean nowCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
+        boolean known = this.battery >= 0f;
+        if (level >= 0 && scale > 0) {
+            this.battery = Math.max(0f, Math.min(1f, level / (float) scale));
+        }
+        if (known && nowCharging && !this.charging && getWidth() > 0) {
+            // Plugged in: a big swell rises from the bottom of the screen.
+            poke(getWidth() / 2f, getHeight() * 0.92f, 1.6f);
+        }
+        this.charging = nowCharging;
+        invalidate();
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        float gx = event.values[0];
+        float gy = event.values[1];
+        if (Float.isNaN(this.gravityX)) {
+            this.gravityX = this.baseX = gx;
+            this.gravityY = this.baseY = gy;
+        }
+        // Smooth the reading, and let a slow baseline follow it so only changes in tilt slosh the
+        // blocks; however the phone is held, the field settles flat again after a few seconds.
+        this.gravityX += (gx - this.gravityX) * 0.3f;
+        this.gravityY += (gy - this.gravityY) * 0.3f;
+        this.baseX += (this.gravityX - this.baseX) * 0.012f;
+        this.baseY += (this.gravityY - this.baseY) * 0.012f;
+        float tx = Math.max(-0.9f, Math.min(0.9f, -(this.gravityX - this.baseX) / 9.81f * 2.2f));
+        float ty = Math.max(-0.9f, Math.min(0.9f, (this.gravityY - this.baseY) / 9.81f * 2.2f));
+        if (Math.abs(tx) < 0.015f) {
+            tx = 0f;
+        }
+        if (Math.abs(ty) < 0.015f) {
+            ty = 0f;
+        }
+        if (tx != this.tiltX || ty != this.tiltY) {
+            this.tiltX = tx;
+            this.tiltY = ty;
+            if (!this.moving) {
+                this.moving = true;
+                this.lastFrame = SystemClock.uptimeMillis();
+            }
+            if (!this.paused) {
+                postInvalidateOnAnimation();
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
+
+    /** Where the battery's water line sits on screen, or -1 when it isn't shown. */
+    float waterLine(int height) {
+        if (!this.lively || this.battery < 0f) {
+            return -1f;
+        }
+        return height * (0.97f - this.battery * 0.9f);
     }
 
     /** Advances the springs by {@code seconds}; returns false once everything has come to rest. */
@@ -237,7 +395,8 @@ final class BlockField extends View {
                     float here = z[k];
                     float sum = (a > 0 ? z[k - rows] : 0f) + (a < cols - 1 ? z[k + rows] : 0f)
                             + (b > 0 ? z[k - 1] : 0f) + (b < rows - 1 ? z[k + 1] : 0f);
-                    float accel = -STIFFNESS * here + COUPLING * (sum - 4f * here) - DAMPING * v[k];
+                    float rest = this.tiltX * this.across[k] + this.tiltY * this.down[k];
+                    float accel = -STIFFNESS * (here - rest) + COUPLING * (sum - 4f * here) - DAMPING * v[k];
                     v[k] += accel * STEP;
                 }
             }
@@ -246,9 +405,10 @@ final class BlockField extends View {
             }
         }
         for (int k = 0; k < z.length; k++) {
-            peak = Math.max(peak, Math.max(Math.abs(z[k]), Math.abs(v[k]) * 0.1f));
+            float rest = this.tiltX * this.across[k] + this.tiltY * this.down[k];
+            peak = Math.max(peak, Math.max(Math.abs(z[k] - rest), Math.abs(v[k]) * 0.1f));
         }
-        if (peak < 0.003f) {
+        if (peak < 0.003f && this.tiltX == 0f && this.tiltY == 0f) {
             java.util.Arrays.fill(z, 0f);
             java.util.Arrays.fill(v, 0f);
             return false;
@@ -270,7 +430,11 @@ final class BlockField extends View {
             this.time = (now - this.born) / 1000f;
             if (now >= this.nextDrop) {
                 this.nextDrop = now + 900 + this.random.nextInt(1600);
-                poke(this.random.nextFloat() * width, height * (0.05f + this.random.nextFloat() * 0.9f), 0.45f + this.random.nextFloat() * 0.45f);
+                float line = waterLine(height);
+                if (this.charging && line > 0f && this.random.nextBoolean()) {
+                    // While charging, bubbles keep rising out of the water line.
+                    poke(this.random.nextFloat() * width, Math.min(height, line + this.tileH * (1f + this.random.nextFloat() * 3f)), 0.7f);
+                } else poke(this.random.nextFloat() * width, height * (0.05f + this.random.nextFloat() * 0.9f), 0.45f + this.random.nextFloat() * 0.45f);
             }
         }
         if (this.moving) {
@@ -282,6 +446,7 @@ final class BlockField extends View {
         float half = this.tileW / 2f;
         float halfH = this.tileH / 2f;
         float centre = width / 2f;
+        float water = waterLine(height);
         int last = this.cols + this.rows - 2;
         // Back to front: blocks further down the screen (larger i + j) overlap the ones behind them.
         for (int s = 0; s <= last; s++) {
@@ -303,7 +468,8 @@ final class BlockField extends View {
                 float swell = this.lively ? 0.2f * (float) (Math.sin(i * 0.55f + this.time * 1.7f) * Math.cos(j * 0.45f - this.time * 1.2f)) : 0f;
                 float h = Math.max(-1.2f, Math.min(1.6f, this.z[k] + swell));
                 float y = baseY - h * this.lift;
-                drawBlock(canvas, x, y, baseY / height, h, this.marks[k]);
+                float wave = water < 0f ? 0f : (baseY - (water + (float) Math.sin(x / width * 6.3f + this.time * 1.8f) * this.tileH * 0.6f)) / this.tileH;
+                drawBlock(canvas, x, y, baseY / height, h, this.marks[k], water < 0f ? Float.NaN : wave);
             }
         }
         if ((this.moving || ambient) && !this.paused) {
@@ -311,9 +477,17 @@ final class BlockField extends View {
         }
     }
 
-    void drawBlock(Canvas canvas, float x, float y, float place, float h, int mark) {
+    void drawBlock(Canvas canvas, float x, float y, float place, float h, int mark, float water) {
         float glow = Math.max(0f, Math.min(1f, h));
         int base = gradient(place);
+        if (!Float.isNaN(water)) {
+            // Below the battery line the blocks sit in a clear aqua tint, and the line itself glows.
+            if (water > 0f) {
+                base = mix(base, 0xff1aa6c4, 0.22f);
+            }
+            float band = (float) Math.exp(-water * water * 1.5f);
+            glow = Math.max(glow, band * (this.charging ? 0.85f : 0.6f));
+        }
         if (this.lively) {
             // The whole palette turns slowly through the colour wheel, a band of shifted hue sweeps down the
             // screen, and rising blocks swing further round so ripples flash new colours.

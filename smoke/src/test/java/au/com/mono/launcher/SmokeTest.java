@@ -100,6 +100,15 @@ public class SmokeTest {
         f.lively = true;
         f.draw(new android.graphics.Canvas(b));
         assertNotEquals(BlockField.hue(0xff1d6f86, 0f), BlockField.hue(0xff1d6f86, 120f));
+        f.battery = 0.5f;
+        f.charging = true;
+        assertTrue(f.waterLine(2400) > 0);
+        f.draw(new android.graphics.Canvas(b));
+        a.notificationRipple("com.example.chat");
+        a.findAppView(a.root, "com.example.chat");
+        f.tiltX = 0.4f;
+        assertTrue("tilt keeps the field moving", f.step(1f / 60f));
+        f.tiltX = 0f;
         f.lively = false;
         boolean still = true;
         for (int k = 0; k < 2000 && still; k++) still = f.step(1f / 60f);
