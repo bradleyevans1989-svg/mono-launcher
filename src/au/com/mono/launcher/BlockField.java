@@ -25,7 +25,7 @@ final class BlockField extends View {
 
     static final float STIFFNESS = 26f;
     static final float COUPLING = 240f;
-    static final float DAMPING = 3.2f;
+    static final float DAMPING = 2.4f;
     static final float STEP = 1f / 120f;
 
     final float density;
@@ -49,6 +49,18 @@ final class BlockField extends View {
     byte[] marks = new byte[0];
 
     boolean moving;
+    /** Lively fields drift through colours and ripple on their own; still ones (wallpaper, Calm) only answer touch. */
+    boolean lively;
+    Quiet quiet;
+    final long born = SystemClock.uptimeMillis();
+    long nextDrop;
+    final java.util.Random random = new java.util.Random();
+    float time;
+
+    /** Lets the launcher hold the ambient motion while the field is covered, or when the user picked Calm. */
+    interface Quiet {
+        boolean quiet();
+    }
     boolean paused;
     long lastFrame;
     float lastPokeX = Float.NaN;
@@ -189,7 +201,7 @@ final class BlockField extends View {
                 float dist = (float) Math.hypot(bx - x, (by - y) * 1.6f);
                 if (dist < radius) {
                     float fall = 1f - dist / radius;
-                    this.v[a * this.rows + b] += 7.5f * strength * fall * fall;
+                    this.v[a * this.rows + b] += 10f * strength * fall * fall;
                 }
             }
         }
@@ -204,7 +216,7 @@ final class BlockField extends View {
 
     void setPaused(boolean paused) {
         this.paused = paused;
-        if (!paused && this.moving) {
+        if (!paused && (this.moving || this.lively)) {
             this.lastFrame = SystemClock.uptimeMillis();
             postInvalidateOnAnimation();
         }
@@ -252,6 +264,15 @@ final class BlockField extends View {
         if (this.cols == 0 || width == 0 || height == 0) {
             return;
         }
+        boolean ambient = this.lively && !this.paused && (this.quiet == null || !this.quiet.quiet());
+        if (ambient) {
+            long now = SystemClock.uptimeMillis();
+            this.time = (now - this.born) / 1000f;
+            if (now >= this.nextDrop) {
+                this.nextDrop = now + 900 + this.random.nextInt(1600);
+                poke(this.random.nextFloat() * width, height * (0.05f + this.random.nextFloat() * 0.9f), 0.45f + this.random.nextFloat() * 0.45f);
+            }
+        }
         if (this.moving) {
             long now = SystemClock.uptimeMillis();
             float elapsed = Math.min(0.05f, (now - this.lastFrame) / 1000f);
@@ -279,19 +300,26 @@ final class BlockField extends View {
                     continue;
                 }
                 int k = a * this.rows + b;
-                float h = Math.max(-1.2f, Math.min(1.6f, this.z[k]));
+                float swell = this.lively ? 0.2f * (float) (Math.sin(i * 0.55f + this.time * 1.7f) * Math.cos(j * 0.45f - this.time * 1.2f)) : 0f;
+                float h = Math.max(-1.2f, Math.min(1.6f, this.z[k] + swell));
                 float y = baseY - h * this.lift;
                 drawBlock(canvas, x, y, baseY / height, h, this.marks[k]);
             }
         }
-        if (this.moving && !this.paused) {
+        if ((this.moving || ambient) && !this.paused) {
             postInvalidateOnAnimation();
         }
     }
 
     void drawBlock(Canvas canvas, float x, float y, float place, float h, int mark) {
-        int base = gradient(place);
         float glow = Math.max(0f, Math.min(1f, h));
+        int base = gradient(place);
+        if (this.lively) {
+            // The whole palette turns slowly through the colour wheel, a band of shifted hue sweeps down the
+            // screen, and rising blocks swing further round so ripples flash new colours.
+            float degrees = this.time * 4f + 40f * (float) Math.sin(place * 4.7f - this.time * 0.6f) + 70f * glow;
+            base = hue(base, degrees);
+        }
         float sink = Math.max(0f, Math.min(1f, -h));
         int topColor = mix(base, 0xffbff8ff, 0.06f + 0.55f * glow);
         if (place > 0.35f && place < 0.75f) {
@@ -333,6 +361,21 @@ final class BlockField extends View {
             }
         }
         canvas.restore();
+    }
+
+    static int hue(int color, float degrees) {
+        double rad = Math.toRadians(degrees);
+        float c = (float) Math.cos(rad);
+        float s = (float) Math.sin(rad);
+        float r = Color.red(color), g = Color.green(color), b = Color.blue(color);
+        float nr = r * (0.213f + 0.787f * c - 0.213f * s) + g * (0.715f - 0.715f * c - 0.715f * s) + b * (0.072f - 0.072f * c + 0.928f * s);
+        float ng = r * (0.213f - 0.213f * c + 0.143f * s) + g * (0.715f + 0.285f * c + 0.140f * s) + b * (0.072f - 0.072f * c - 0.283f * s);
+        float nb = r * (0.213f - 0.213f * c - 0.787f * s) + g * (0.715f - 0.715f * c + 0.715f * s) + b * (0.072f + 0.928f * c + 0.072f * s);
+        return Color.rgb(clamp(nr), clamp(ng), clamp(nb));
+    }
+
+    static int clamp(float v) {
+        return v < 0f ? 0 : v > 255f ? 255 : (int) v;
     }
 
     static int gradient(float t) {

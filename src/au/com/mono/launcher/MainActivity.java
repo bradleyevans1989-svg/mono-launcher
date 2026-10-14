@@ -749,6 +749,13 @@ public class MainActivity extends Activity {
         getWindow().setBackgroundDrawable(new ColorDrawable(0));
         getWindow().addFlags(1048576);
         this.blockField = new BlockField(this);
+        this.blockField.lively = !this.prefs.getBoolean("calmBackground", false);
+        this.blockField.quiet = new BlockField.Quiet() {
+            @Override
+            public boolean quiet() {
+                return MainActivity.this.drawer != null || (MainActivity.this.wallpaperView != null && MainActivity.this.wallpaperView.getDrawable() != null);
+            }
+        };
         this.blockField.setPaused(!this.resumed);
         this.root.addView(this.blockField, new FrameLayout.LayoutParams(-1, -1));
         this.wallpaperView = new ImageView(this);
@@ -2039,6 +2046,9 @@ public class MainActivity extends Activity {
             }
             this.drawer = null;
             this.drawerRefresh = null;
+            if (this.blockField != null) {
+                this.blockField.invalidate();
+            }
         }
         if (this.homeDirty) {
             this.handler.post(new Runnable() { // from class: au.com.mono.launcher.MainActivity$$ExternalSyntheticLambda1
@@ -3520,6 +3530,12 @@ public class MainActivity extends Activity {
         if (i == 7) {
             syncWallpaper(true);
         }
+        if (i == 20) {
+            boolean calm = !this.prefs.getBoolean("calmBackground", false);
+            this.prefs.edit().putBoolean("calmBackground", calm).apply();
+            toast(calm ? "Background now moves only when you touch it" : "Background now ripples and shifts colour");
+            buildHome();
+        }
         if (i == 8) {
             nameFolder(null);
         }
@@ -3577,7 +3593,7 @@ public class MainActivity extends Activity {
                 } else if (which == 1) {
                     settingsGroup("Home screen", new String[]{"Edit dock and shortcuts", "New folder", "Manage folders", "Icon size", "Refresh apps"}, new int[]{10, 8, 9, 3, 12});
                 } else if (which == 2) {
-                    settingsGroup("Wallpaper", new String[]{"Choose photo wallpaper", "Restore Mono wallpaper", "Sync home wallpaper"}, new int[]{1, 2, 7});
+                    settingsGroup("Wallpaper", new String[]{"Choose photo wallpaper", "Restore Mono wallpaper", "Sync home wallpaper", MainActivity.this.prefs.getBoolean("calmBackground", false) ? "Background motion: Calm" : "Background motion: Lively"}, new int[]{1, 2, 7, 20});
                 } else if (which == 3) {
                     MainActivity.this.m52lambda$58$aucommonolauncherMainActivity(dialog, 0);
                 } else if (which == 4) {

@@ -97,6 +97,10 @@ public class SmokeTest {
         assertTrue(f.moving);
         android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(1080, 2400, android.graphics.Bitmap.Config.ARGB_8888);
         f.draw(new android.graphics.Canvas(b));
+        f.lively = true;
+        f.draw(new android.graphics.Canvas(b));
+        assertNotEquals(BlockField.hue(0xff1d6f86, 0f), BlockField.hue(0xff1d6f86, 120f));
+        f.lively = false;
         boolean still = true;
         for (int k = 0; k < 2000 && still; k++) still = f.step(1f / 60f);
         assertFalse("field comes to rest", still);
