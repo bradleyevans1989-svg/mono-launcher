@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="21" android:versionName="0.13.1" android:compileSdkVersion="35" android:compileSdkVersionCodename="15" package="au.com.mono.launcher" platformBuildVersionCode="35" platformBuildVersionName="15">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="22" android:versionName="0.14.0" android:compileSdkVersion="35" android:compileSdkVersionCodename="15" package="au.com.mono.launcher" platformBuildVersionCode="35" platformBuildVersionName="15">
   <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35">
   </uses-sdk>
   <uses-permission android:name="android.permission.SET_WALLPAPER">
@@ -8,6 +8,16 @@
   <uses-permission android:name="android.permission.INTERNET">
   </uses-permission>
   <uses-permission android:name="com.android.alarm.permission.SET_ALARM">
+  </uses-permission>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS">
+  </uses-permission>
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM">
+  </uses-permission>
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32">
+  </uses-permission>
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED">
+  </uses-permission>
+  <uses-permission android:name="android.permission.VIBRATE">
   </uses-permission>
   <queries>
     <package android:name="com.openai.chatgpt">
@@ -44,5 +54,13 @@
         </action>
       </intent-filter>
     </activity>
+    <receiver android:name=".ReminderReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED">
+        </action>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED">
+        </action>
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>

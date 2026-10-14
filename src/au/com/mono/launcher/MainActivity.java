@@ -45,6 +45,9 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
+import android.graphics.Path;
+import android.content.pm.PackageManager;
+import java.util.List;
 import android.util.AtomicFile;
 import android.util.DisplayMetrics;
 import android.view.DragEvent;
@@ -390,12 +393,18 @@ public class MainActivity extends Activity {
             }
         });
         handlePin(getIntent());
+        if (Reminders.ACTION_SHOW.equals(getIntent().getAction())) {
+            showReminders();
+        }
     }
 
     @Override // android.app.Activity
     public void onResume() {
         super.onResume();
         this.resumed = true;
+        if (this.drawerRefresh != null && this.drawerRefresh == this.remindersRefresh) {
+            this.drawerRefresh.run();
+        }
         if (this.pet != null) {
             this.pet.setActive(true);
         }
@@ -441,6 +450,9 @@ public class MainActivity extends Activity {
             buildHome();
         }
         handlePin(intent);
+        if (Reminders.ACTION_SHOW.equals(intent.getAction())) {
+            showReminders();
+        }
     }
 
     @Override // android.app.Activity
@@ -2851,6 +2863,9 @@ public class MainActivity extends Activity {
 
     static final int REQUEST_VOICE = 13;
     static final int REQUEST_CHATGPT_VOICE = 14;
+    static final int REQUEST_REMINDER_VOICE = 15;
+    static final int REQUEST_NOTIFICATIONS = 16;
+    Runnable remindersRefresh;
 
     /** The home ask bar goes to the free ChatGPT app unless the user switches it to Mono in Settings, Assistant. */
     boolean askOpensChatGpt() {
@@ -2891,6 +2906,22 @@ public class MainActivity extends Activity {
         hint.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         hint.setTextColor(-4598813);
         bar.addView(hint, new LinearLayout.LayoutParams(0, -1, 1.0f));
+        View bell = bellButton();
+        bell.setContentDescription("Add a reminder by voice. Hold to see reminders");
+        bell.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                speakReminder();
+            }
+        });
+        bell.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View view) {
+                showReminders();
+                return true;
+            }
+        });
+        bar.addView(bell, new LinearLayout.LayoutParams(dp(44.0f), -1));
         View mic = micButton();
         mic.setContentDescription("Ask by voice");
         mic.setOnClickListener(new View.OnClickListener() {
@@ -2943,6 +2974,304 @@ public class MainActivity extends Activity {
                 canvas.restore();
             }
         };
+    }
+
+    /** A line-drawn bell in the accent colour, matching the microphone beside it. */
+    View bellButton() {
+        return new View(this) {
+            final Paint ink = new Paint(Paint.ANTI_ALIAS_FLAG);
+            final Path body = new Path();
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                float unit = dp(22.0f) / 24.0f;
+                canvas.save();
+                canvas.translate((getWidth() - dp(22.0f)) / 2.0f, (getHeight() - dp(22.0f)) / 2.0f);
+                canvas.scale(unit, unit);
+                this.body.reset();
+                this.body.moveTo(12.0f, 3.5f);
+                this.body.cubicTo(8.5f, 3.5f, 6.5f, 6.0f, 6.5f, 10.0f);
+                this.body.lineTo(6.5f, 14.5f);
+                this.body.lineTo(4.5f, 17.0f);
+                this.body.lineTo(19.5f, 17.0f);
+                this.body.lineTo(17.5f, 14.5f);
+                this.body.lineTo(17.5f, 10.0f);
+                this.body.cubicTo(17.5f, 6.0f, 15.5f, 3.5f, 12.0f, 3.5f);
+                this.body.close();
+                this.ink.setStyle(Paint.Style.FILL);
+                this.ink.setColor(ACCENT & 0x00ffffff | 0x33000000);
+                canvas.drawPath(this.body, this.ink);
+                this.ink.setStyle(Paint.Style.STROKE);
+                this.ink.setStrokeWidth(1.8f);
+                this.ink.setStrokeCap(Paint.Cap.ROUND);
+                this.ink.setStrokeJoin(Paint.Join.ROUND);
+                this.ink.setColor(ACCENT);
+                canvas.drawPath(this.body, this.ink);
+                canvas.drawArc(9.5f, 17.5f, 14.5f, 22.0f, 0.0f, 180.0f, false, this.ink);
+                canvas.restore();
+            }
+        };
+    }
+
+    void speakReminder() {
+        askForNotifications();
+        if (!listenFor(REQUEST_REMINDER_VOICE, "Say a reminder, like “call Mum at 5pm”")) {
+            confirmReminder("");
+        }
+    }
+
+    void askForNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQUEST_NOTIFICATIONS);
+        }
+    }
+
+    /** Shows what Mono heard so the task and time can be fixed before the reminder is set. */
+    void confirmReminder(String spoken) {
+        ReminderParser.Result parsed = ReminderParser.parse(spoken, Calendar.getInstance());
+        final long[] when = {parsed.when};
+        if (when[0] < 0) {
+            Calendar later = Calendar.getInstance();
+            later.add(Calendar.HOUR_OF_DAY, 1);
+            later.set(Calendar.MINUTE, 0);
+            later.set(Calendar.SECOND, 0);
+            later.set(Calendar.MILLISECOND, 0);
+            when[0] = later.getTimeInMillis();
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(22.0f), dp(4.0f), dp(22.0f), 0);
+        final EditText task = new EditText(this);
+        task.setHint("What to remember");
+        task.setText(spoken == null || spoken.trim().isEmpty() ? "" : parsed.task);
+        task.setTextColor(-1);
+        task.setHintTextColor(-7428935);
+        task.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        form.addView(task, new LinearLayout.LayoutParams(-1, -2));
+        final TextView time = text("", 16);
+        time.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        time.setTextColor(ACCENT);
+        time.setPadding(dp(4.0f), dp(12.0f), dp(4.0f), dp(12.0f));
+        final Runnable showTime = new Runnable() {
+            @Override
+            public void run() {
+                String label = Reminders.when(MainActivity.this, when[0]);
+                time.setText("⏰  " + Character.toUpperCase(label.charAt(0)) + label.substring(1) + "  ·  change");
+            }
+        };
+        showTime.run();
+        time.setContentDescription("Change the reminder time");
+        time.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                pickReminderTime(when, showTime);
+            }
+        });
+        form.addView(time, new LinearLayout.LayoutParams(-1, -2));
+        if (parsed.when < 0 && spoken != null && !spoken.trim().isEmpty()) {
+            TextView hint = text("I didn't catch a time, so check this one.", 13);
+            hint.setGravity(Gravity.START);
+            hint.setTextColor(-4598813);
+            form.addView(hint, new LinearLayout.LayoutParams(-1, -2));
+        }
+        final AlertDialog dialog = new MonoDialog().setTitle("New reminder").setView(form)
+                .setPositiveButton("Set reminder", (DialogInterface.OnClickListener) null)
+                .setNegativeButton("Cancel", (DialogInterface.OnClickListener) null)
+                .setNeutralButton("All reminders", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        showReminders();
+                    }
+                }).create();
+        dialog.setOnShowListener(new DialogInterface.OnShowListener() {
+            @Override
+            public void onShow(DialogInterface d) {
+                styleButtons(dialog);
+                dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        if (when[0] <= System.currentTimeMillis()) {
+                            toast("Pick a time that hasn't passed yet");
+                            return;
+                        }
+                        String what = task.getText().toString().trim();
+                        Reminders.add(MainActivity.this, what.isEmpty() ? "Reminder" : what, when[0]);
+                        askForNotifications();
+                        toast("Reminder set for " + Reminders.when(MainActivity.this, when[0]));
+                        dialog.dismiss();
+                        if (MainActivity.this.drawerRefresh != null && MainActivity.this.drawerRefresh == MainActivity.this.remindersRefresh) {
+                            MainActivity.this.drawerRefresh.run();
+                        }
+                    }
+                });
+            }
+        });
+        dialog.show();
+    }
+
+    void pickReminderTime(final long[] when, final Runnable changed) {
+        final Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(when[0]);
+        android.app.DatePickerDialog date = new android.app.DatePickerDialog(this, new android.app.DatePickerDialog.OnDateSetListener() {
+            @Override
+            public void onDateSet(android.widget.DatePicker picker, int year, int month, int day) {
+                c.set(year, month, day);
+                new android.app.TimePickerDialog(MainActivity.this, new android.app.TimePickerDialog.OnTimeSetListener() {
+                    @Override
+                    public void onTimeSet(android.widget.TimePicker picker, int hour, int minute) {
+                        c.set(Calendar.HOUR_OF_DAY, hour);
+                        c.set(Calendar.MINUTE, minute);
+                        c.set(Calendar.SECOND, 0);
+                        c.set(Calendar.MILLISECOND, 0);
+                        when[0] = c.getTimeInMillis();
+                        changed.run();
+                    }
+                }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), DateFormat.is24HourFormat(MainActivity.this)).show();
+            }
+        }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
+        date.getDatePicker().setMinDate(System.currentTimeMillis() - 1000L);
+        date.show();
+    }
+
+    /** The reminders list: what's coming up, what's ringing, and what's been done. */
+    void showReminders() {
+        m57lambda$63$aucommonolauncherMainActivity();
+        final LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18.0f), this.home.getPaddingTop(), dp(18.0f), this.home.getPaddingBottom());
+        panel.setBackgroundColor(-435609549);
+        LinearLayout header = row();
+        TextView title = text("Reminders", 20);
+        title.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        header.addView(title, new LinearLayout.LayoutParams(0, dp(48.0f), 1.0f));
+        TextView close = text("✕", 20);
+        close.setContentDescription("Close reminders");
+        close.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                MainActivity.this.m57lambda$63$aucommonolauncherMainActivity();
+            }
+        });
+        header.addView(close, new LinearLayout.LayoutParams(dp(48.0f), dp(48.0f)));
+        panel.addView(header);
+
+        LinearLayout buttons = row();
+        TextView speak = text("Speak a reminder", 15);
+        speak.setTextColor(ACCENT);
+        speak.setBackground(bg(BLACK, 22));
+        speak.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                speakReminder();
+            }
+        });
+        weighted(buttons, speak, 1.0f, 48);
+        TextView type = text("Type one", 15);
+        type.setBackground(bg(BLACK, 22));
+        type.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                askForNotifications();
+                confirmReminder("");
+            }
+        });
+        weighted(buttons, type, 1.0f, 48);
+        panel.addView(buttons, new LinearLayout.LayoutParams(-1, -2));
+
+        ScrollView scroll = new ScrollView(this);
+        final LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0, dp(8.0f), 0, dp(8.0f));
+        scroll.addView(list);
+        panel.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1.0f));
+
+        final Runnable refresh = new Runnable() {
+            @Override
+            public void run() {
+                renderReminders(list, this);
+            }
+        };
+        this.remindersRefresh = refresh;
+        this.drawer = panel;
+        this.drawerRefresh = refresh;
+        this.home.setVisibility(View.INVISIBLE);
+        if (this.pet != null) {
+            this.pet.setVisibility(View.INVISIBLE);
+            this.pet.setActive(false);
+        }
+        this.root.addView(panel, new FrameLayout.LayoutParams(-1, -1));
+        refresh.run();
+    }
+
+    void renderReminders(LinearLayout list, final Runnable refresh) {
+        list.removeAllViews();
+        List<Reminders.Item> items = Reminders.all(this);
+        boolean doneHeading = false;
+        if (items.isEmpty()) {
+            TextView empty = text("No reminders yet. Tap the bell on the home screen and say something like “take the bins out tomorrow at 7pm”.", 14);
+            empty.setGravity(Gravity.START);
+            empty.setTextColor(-4598813);
+            empty.setPadding(dp(4.0f), dp(16.0f), dp(4.0f), 0);
+            list.addView(empty);
+        }
+        for (final Reminders.Item item : items) {
+            if (item.done && !doneHeading) {
+                doneHeading = true;
+                TextView heading = text("Completed", 13);
+                heading.setGravity(Gravity.START);
+                heading.setTextColor(-4598813);
+                heading.setPadding(dp(4.0f), dp(16.0f), 0, dp(4.0f));
+                list.addView(heading);
+            }
+            LinearLayout card = row();
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setBackground(bg(item.ringing && !item.done ? -14581884 : BLACK, 18));
+            card.setPadding(dp(14.0f), dp(8.0f), dp(6.0f), dp(8.0f));
+            LinearLayout words = new LinearLayout(this);
+            words.setOrientation(LinearLayout.VERTICAL);
+            TextView what = text(item.text, 16);
+            what.setGravity(Gravity.START);
+            if (item.done) {
+                what.setPaintFlags(what.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                what.setAlpha(0.6f);
+            }
+            words.addView(what);
+            String label = Reminders.when(this, item.due);
+            TextView when = text((item.ringing && !item.done ? "Ringing · due " : item.done ? "Due " : "") + label, 13);
+            when.setGravity(Gravity.START);
+            when.setTextColor(item.ringing && !item.done ? ACCENT : -4598813);
+            words.addView(when);
+            card.addView(words, new LinearLayout.LayoutParams(0, -2, 1.0f));
+            TextView mark = text(item.done ? "Undo" : "Done", 14);
+            mark.setTextColor(ACCENT);
+            mark.setContentDescription(item.done ? "Mark " + item.text + " not done" : "Mark " + item.text + " complete");
+            mark.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    if (item.done) {
+                        Reminders.reopen(MainActivity.this, item.id);
+                    } else {
+                        Reminders.complete(MainActivity.this, item.id);
+                    }
+                    refresh.run();
+                }
+            });
+            card.addView(mark, new LinearLayout.LayoutParams(dp(56.0f), dp(44.0f)));
+            TextView remove = text("✕", 16);
+            remove.setTextColor(-4598813);
+            remove.setContentDescription("Delete " + item.text);
+            remove.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    Reminders.delete(MainActivity.this, item.id);
+                    refresh.run();
+                }
+            });
+            card.addView(remove, new LinearLayout.LayoutParams(dp(40.0f), dp(44.0f)));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(8.0f);
+            list.addView(card, lp);
+        }
     }
 
     void showAssistant(boolean voice) {
@@ -3225,14 +3554,16 @@ public class MainActivity extends Activity {
         listenFor(REQUEST_VOICE, "Ask Mono");
     }
 
-    void listenFor(int request, String prompt) {
+    boolean listenFor(int request, String prompt) {
         Intent intent = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, prompt);
         try {
             startActivityForResult(intent, request);
+            return true;
         } catch (Exception e) {
             toast("Voice input isn't available on this phone");
+            return false;
         }
     }
 
@@ -3653,6 +3984,15 @@ public class MainActivity extends Activity {
     @Override // android.app.Activity
     protected void onActivityResult(int i, int i2, Intent intent) {
         super.onActivityResult(i, i2, intent);
+        if (i == REQUEST_REMINDER_VOICE) {
+            if (i2 == -1 && intent != null) {
+                ArrayList<String> heard = intent.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+                if (heard != null && !heard.isEmpty()) {
+                    confirmReminder(heard.get(0));
+                }
+            }
+            return;
+        }
         if (i == REQUEST_CHATGPT_VOICE) {
             if (i2 == -1 && intent != null) {
                 ArrayList<String> heard = intent.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);

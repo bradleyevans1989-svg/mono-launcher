@@ -54,6 +54,7 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --verbose --min-sdk-version 26 "$APK"
           "$BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$APK" | tail -1
           "$BUILD_TOOLS/aapt2" dump badging "$APK" | head -5
+          "$BUILD_TOOLS/aapt2" dump xmltree --file AndroidManifest.xml "$APK" | grep -E "exported|maxSdkVersion|receiver"
 
       - uses: actions/upload-artifact@v4
         with:
