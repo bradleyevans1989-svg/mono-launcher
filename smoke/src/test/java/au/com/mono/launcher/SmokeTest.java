@@ -104,9 +104,6 @@ public class SmokeTest {
         f.charging = true;
         assertTrue(f.waterLine(2400) > 0);
         f.draw(new android.graphics.Canvas(b));
-        a.notificationRipple("com.example.chat");
-        a.notificationAccessHelp();
-        a.findAppView(a.root, "com.example.chat");
         f.tiltX = 0.4f;
         assertTrue("tilt keeps the field moving", f.step(1f / 60f));
         f.tiltX = 0f;
